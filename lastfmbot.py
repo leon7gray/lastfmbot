@@ -15,13 +15,9 @@ intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix='$', intents=intents)
 
-#Spotify token
-CLIENT_ID = '3a8efb67417c464695fc8ea9d2719e68'
-CLIENT_SECRET = '07669f1ed5ae415bb9b047e90646f5f9'
-AUTHORIZATION_CODE = ""
 #last.fm token
-API_KEY = '70560a342afc2fe28d1bcf0ae419690c'
-SHARED_SECRET = '3bbc284edee3f6c80f4d2dc3738df101'
+API_KEY = os.getenv('API_KEY')
+SHARED_SECRET = os.getenv('SHARED_SECRET')
 ROOT_URL = "http://ws.audioscrobbler.com/2.0/"
 
 def get_token():
