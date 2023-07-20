@@ -88,4 +88,8 @@ async def top(ctx, user):
     print(message)
     await ctx.send(message)
 
+@bot.command()
+async def h(ctx):
+    help = "```$login: authorize access \n$info [username]: get user info \n$top [user]: show top 5 tracks for the user```"
+    await ctx.send(help)
 bot.run(TOKEN)
