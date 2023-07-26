@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import requests
+import database
 
 #Discord token
 load_dotenv()
@@ -24,6 +25,7 @@ SHARED_SECRET = os.getenv('SHARED_SECRET')
 ROOT_URL = "http://ws.audioscrobbler.com/2.0/"
 FM_TOKEN = get_token()
 
+accounts = {}
 
 def get_session(token):
     signature = md5(("api_key" + API_KEY + "methodauth.getSessiontoken" + FM_TOKEN + SHARED_SECRET).encode('utf-8')).hexdigest()
@@ -47,6 +49,11 @@ def get_usertoptracks(user):
     result = requests.post(ROOT_URL + url)
     return(result.json()["toptracks"]["track"])
 
+def get_usertopartists(user):
+    url = "?method=user.gettopartists&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=5"
+    result = requests.post(ROOT_URL + url)
+    return(result.json()["topartists"]["artist"])
+
 @bot.event
 async def on_ready():
 
@@ -69,8 +76,6 @@ async def on_message(message):
 async def stat(ctx):
     token = get_token()
 
-    
-
 @bot.command()
 async def login(ctx):
     url = "http://www.last.fm/api/auth/?api_key="+ API_KEY + "&token=" + FM_TOKEN
@@ -78,15 +83,34 @@ async def login(ctx):
     get_session(FM_TOKEN)
 
 @bot.command()
-async def info(ctx, user):
-    await ctx.send(get_userinfo(user))
+async def set(ctx, user):
+    accounts[ctx.author] = user
+    database.test()
+    await ctx.send("You successfully set your username!")
+
+@bot.command()
+async def info(ctx, user=None):
+    if user != None:
+        await ctx.send(get_userinfo(user))
+        return
+    else:
+        if (ctx.author not in accounts.keys()):
+            await ctx.send("Please set your default username using the command '$set'")
+            return
+        await ctx.send(get_userinfo(accounts[ctx.author]))
 
 @bot.command()    
-async def top(ctx, user):
+async def topSongs(ctx, user):
     result = get_usertoptracks(user)
     message = [track['name'] for track in result]
+    await ctx.send("```" + '\n' + '\n'.join(message) + "```")
+
+@bot.command()    
+async def topArtists(ctx, user):
+    result = get_usertopartists(user)
+    message = [artist['name'] for artist in result]
     print(message)
-    await ctx.send(message)
+    await ctx.send("```" + '\n' + '\n'.join(message) + "```")
 
 @bot.command()
 async def h(ctx):
