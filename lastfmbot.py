@@ -1,3 +1,4 @@
+import asyncio
 from hashlib import md5
 import os
 import discord
@@ -49,9 +50,9 @@ def get_usertoptracks(user, time=None):
         pass
     url = ''
     if (time == None):
-        url = "?method=user.gettoptracks&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=10"
+        url = "?method=user.gettoptracks&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=50"
     else:
-        url = "?method=user.gettoptracks&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=10&period=" + time
+        url = "?method=user.gettoptracks&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=50&period=" + time
     result = requests.post(ROOT_URL + url)
     return(result.json()["toptracks"]["track"])
 
@@ -104,31 +105,72 @@ async def info(ctx, user=None):
             return
         await ctx.send(get_userinfo(accounts[ctx.author]))
 
+
 @bot.command()    
 async def toptracks(ctx, time="overall"):
     user = database.get_default_user(ctx.author.name)
+    if (user == None):
+        await ctx.send("Please set your last.fm username using $set (username)")
+        return
     result = database.get_toptracks(ctx.author.name, time)
     if (result == None):
-        database.insert_toptracks(ctx.author.name, get_usertoptracks(user, time), time="overall")
+        database.insert_toptracks(ctx.author.name, get_usertoptracks(user, time), time)
         result = database.get_toptracks(ctx.author.name, time)
-    print(result)
     message = [(track['name'] + " - " + track["playcount"] + " times") for track in result["tracks"]]
-    current_time = result["lastupdated"]
+    lastupdated = result["lastupdated"]
     for i in range(len(message)):
         message[i] = str(i + 1) + ". " + message[i]
-    
+
+    current_page = 1
+    print(toptracks_message(message, current_page, time, lastupdated))
+    bot_message = await ctx.send(toptracks_message(message, current_page, time, lastupdated))
+    await bot_message.add_reaction("⬅️")
+    await bot_message.add_reaction("➡️")
+
+    # Pagination loop
+    def check(reaction, user):
+        return (
+            reaction.message.id == bot_message.id
+            and user == ctx.author
+            and str(reaction.emoji) in ["⬅️", "➡️"]
+        )
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for("reaction_add", timeout=60, check=check)
+
+            if str(reaction.emoji) == "➡️" and current_page < 5:
+                current_page += 1
+            elif str(reaction.emoji) == "⬅️" and current_page > 1:
+                current_page -= 1
+            else:
+                continue
+
+            page_message = toptracks_message(message, current_page, time, lastupdated)
+            await bot_message.edit(content=page_message)
+            await bot_message.remove_reaction(reaction, user)
+
+        except asyncio.TimeoutError:
+            await bot_message.clear_reactions()
+            break
+
+def toptracks_message(message, current_page, time, lastupdated):
+    start_index = (current_page - 1) * 10
+    end_index = min(start_index + 10, len(message))
+    message = message[start_index:end_index]
     if (time == "overall"):
-        await ctx.send("```" + '\nOverall, you listened to\n' + '\n'.join(message) + "\nlast updated: " + current_time.strftime("%Y-%m-%d %H:%M:%S") + "```")
+        message = ("```" + '\nOverall, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     elif (time == "7day"):
-        await ctx.send("```" + '\n' + "For the past week, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\n' + "For the past week, you listened to " + '\n' + '\n'.join(message) + "```")
     elif (time == "1month"):
-        await ctx.send("```" + '\n' + "For the past month, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\n' + "For the past month, you listened to " + '\n' + '\n'.join(message) + "```")
     elif (time == "3month"):
-        await ctx.send("```" + '\n' + "For the past 3 months, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\n' + "For the past 3 months, you listened to " + '\n' + '\n'.join(message) + "```")
     elif (time == "6month"):
-        await ctx.send("```" + '\n' + "For the past 6 months, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\n' + "For the past 6 months, you listened to " + '\n' + '\n'.join(message) + "```")
     elif (time == "12month"):
-        await ctx.send("```" + '\n' + "For the past year, You listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\n' + "For the past year, You listened to " + '\n' + '\n'.join(message) + "```")
+    return message
 
 @bot.command()    
 async def topArtists(ctx, user):

@@ -19,7 +19,10 @@ def set_default_user(user, default_user):
 
 def get_default_user(user):
     current = users.find_one({"username": user})
-    return current["default_user"]
+    if (current != None):
+        return current["default_user"]
+    else:
+        return None
 
 def insert_toptracks(user, tracks, time):
     current_time = datetime.datetime.now()
