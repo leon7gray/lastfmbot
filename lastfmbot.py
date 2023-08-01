@@ -61,6 +61,16 @@ def get_usertopartists(user):
     result = requests.post(ROOT_URL + url)
     return(result.json()["topartists"]["artist"])
 
+def get_nowplaying(user):
+    url = "?method=user.getrecenttracks&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=1"
+    result = requests.post(ROOT_URL + url)
+    return(result.json()["recenttracks"]["track"])
+
+def get_recent(user):
+    url = "?method=user.getrecenttracks&user=" + user + "&api_key=" + API_KEY + "&format=json&limit=50"
+    result = requests.post(ROOT_URL + url)
+    return(result.json()["recenttracks"]["track"])
+
 @bot.event
 async def on_ready():
 
@@ -122,7 +132,6 @@ async def toptracks(ctx, time="overall"):
         message[i] = str(i + 1) + ". " + message[i]
 
     current_page = 1
-    print(toptracks_message(message, current_page, time, lastupdated))
     bot_message = await ctx.send(toptracks_message(message, current_page, time, lastupdated))
     await bot_message.add_reaction("⬅️")
     await bot_message.add_reaction("➡️")
@@ -161,15 +170,89 @@ def toptracks_message(message, current_page, time, lastupdated):
     if (time == "overall"):
         message = ("```" + '\nOverall, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     elif (time == "7day"):
-        message = ("```" + '\n' + "For the past week, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\nFor the past week, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     elif (time == "1month"):
-        message = ("```" + '\n' + "For the past month, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\nFor the past month, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     elif (time == "3month"):
-        message = ("```" + '\n' + "For the past 3 months, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\nFor the past 3 months, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     elif (time == "6month"):
-        message = ("```" + '\n' + "For the past 6 months, you listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\nFor the past 6 months, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     elif (time == "12month"):
-        message = ("```" + '\n' + "For the past year, You listened to " + '\n' + '\n'.join(message) + "```")
+        message = ("```" + '\nFor the past year, you listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
+    return message
+
+@bot.command()    
+async def np(ctx):
+    user = database.get_default_user(ctx.author.name)
+    if (user == None):
+        await ctx.send("Please set your last.fm username using $set (username)")
+        return
+    result = get_nowplaying(user)
+    await ctx.send("Now Playing: " + result[0]["name"])
+    
+@bot.command()    
+async def playing(ctx):
+    nowplaying = []
+    for member in ctx.guild.members:
+        user = database.get_default_user(ctx.author.name)
+        if user != None:
+            np = get_nowplaying(user)
+            if np[0].nowplaying == "true":
+                nowplaying.append(member)
+    await ctx.send(', '.join(nowplaying) + " are currently listening to music")
+
+@bot.command()    
+async def recent(ctx):
+    user = database.get_default_user(ctx.author.name)
+    if (user == None):
+        await ctx.send("Please set your last.fm username using $set (username)")
+        return
+    result = get_recent(user)
+    if (result == None):
+        database.insert_recent(ctx.author.name, result)
+        result = database.get_recent(ctx.author.name)
+    message = [(track['name']) for track in result["tracks"]]
+    lastupdated = result["lastupdated"]
+    for i in range(len(message)):
+        message[i] = str(i + 1) + ". " + message[i]
+
+    current_page = 1
+    bot_message = await ctx.send(toptracks_message(message, current_page, lastupdated))
+    await bot_message.add_reaction("⬅️")
+    await bot_message.add_reaction("➡️")
+
+    # Pagination loop
+    def check(reaction, user):
+        return (
+            reaction.message.id == bot_message.id
+            and user == ctx.author
+            and str(reaction.emoji) in ["⬅️", "➡️"]
+        )
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for("reaction_add", timeout=60, check=check)
+
+            if str(reaction.emoji) == "➡️" and current_page < 5:
+                current_page += 1
+            elif str(reaction.emoji) == "⬅️" and current_page > 1:
+                current_page -= 1
+            else:
+                continue
+
+            page_message = toptracks_message(message, current_page, lastupdated)
+            await bot_message.edit(content=page_message)
+            await bot_message.remove_reaction(reaction, user)
+
+        except asyncio.TimeoutError:
+            await bot_message.clear_reactions()
+            break
+
+def recent_message(message, current_page, lastupdated):
+    start_index = (current_page - 1) * 10
+    end_index = min(start_index + 10, len(message))
+    message = message[start_index:end_index]
+    message = ("```" + '\nYou recently listened to\n' + '\n'.join(message) + "\nlast updated: " + lastupdated.strftime("%Y-%m-%d %H:%M:%S") + "```")
     return message
 
 @bot.command()    

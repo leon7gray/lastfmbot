@@ -35,6 +35,18 @@ def get_toptracks(user, time):
         return current[("toptrack" + time)]
     else:
         return None
+    
+def insert_recent(user, tracks):
+    current_time = datetime.datetime.now()
+    users.update_one({"username": user}, { "$set": { ("recent"): {"tracks": tracks, "lastupdated": current_time} } })
+
+def get_recent(user):
+    current = users.find_one({"username": user, ("recent") : {"$exists" : True}})
+    
+    if (current != None):
+        return current[("recent")]
+    else:
+        return None
 
 def update(user):
     default_user = users.find_one({"username": user})["default_user"]
